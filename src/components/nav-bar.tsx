@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: '/customers', label: 'Customers' },
   { href: '/products',  label: 'Products'  },
   { href: '/orders',    label: 'Orders'    },
+  { href: '/invoices',  label: 'Invoices'  },
 ]
 
 export function NavBar() {

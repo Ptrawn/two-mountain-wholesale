@@ -5,6 +5,7 @@ import type { Metadata } from 'next'
 import type { OrderStatus } from '@/types/order'
 import { VOLUME_OPTIONS } from '@/types/product'
 import { StatusSelect } from '@/components/orders/status-select'
+import { InvoiceSection } from '@/components/orders/invoice-section'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -27,18 +28,25 @@ export default async function OrderDetailPage({ params }: Props) {
   const { id } = await params
   const supabase = createServerClient()
 
-  const { data } = await supabase
-    .from('orders')
-    .select(`
-      id, order_date, status, notes, created_at,
-      customers ( id, store_name, contact_name, phone, email, address, city, state, zip, account_type ),
-      order_line_items (
-        id, quantity, unit_price,
-        products ( id, name, volume_ml, abv_category )
-      )
-    `)
-    .eq('id', id)
-    .single()
+  const [{ data }, { data: invoice }] = await Promise.all([
+    supabase
+      .from('orders')
+      .select(`
+        id, order_date, status, notes, created_at,
+        customers ( id, store_name, contact_name, phone, email, address, city, state, zip, account_type ),
+        order_line_items (
+          id, quantity, unit_price,
+          products ( id, name, volume_ml, abv_category )
+        )
+      `)
+      .eq('id', id)
+      .single(),
+    supabase
+      .from('invoices')
+      .select('id, invoice_number, invoice_date, attachment_url')
+      .eq('order_id', id)
+      .maybeSingle(),
+  ])
 
   if (!data) notFound()
 
@@ -206,6 +214,12 @@ export default async function OrderDetailPage({ params }: Props) {
             </span>
           </div>
         </div>
+
+        {/* Invoice section */}
+        <InvoiceSection
+          orderId={data.id}
+          invoice={invoice ?? null}
+        />
       </div>
     </div>
   )
