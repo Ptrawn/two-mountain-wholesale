@@ -90,3 +90,24 @@ export async function createOrder(
   revalidatePath('/orders')
   redirect(`/orders/${order.id}`)
 }
+
+export async function updateOrderStatus(
+  orderId: string,
+  status: string,
+): Promise<{ error?: string }> {
+  if (!['pending', 'confirmed', 'delivered', 'cancelled'].includes(status)) {
+    return { error: 'Invalid status.' }
+  }
+
+  const supabase = createServerClient()
+  const { error } = await supabase
+    .from('orders')
+    .update({ status })
+    .eq('id', orderId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/orders/${orderId}`)
+  revalidatePath('/orders')
+  return {}
+}

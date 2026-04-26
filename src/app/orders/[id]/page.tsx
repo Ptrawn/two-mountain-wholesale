@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import type { OrderStatus } from '@/types/order'
 import { VOLUME_OPTIONS } from '@/types/product'
+import { StatusSelect } from '@/components/orders/status-select'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -71,7 +72,7 @@ export default async function OrderDetailPage({ params }: Props) {
               {customer?.store_name ?? 'Order'}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <StatusBadge status={status} />
+              <StatusSelect orderId={data.id} initialStatus={status} />
               <span className="text-sm text-slate-500">{formatDate(data.order_date)}</span>
             </div>
           </div>
@@ -221,25 +222,6 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
   )
 }
 
-function StatusBadge({ status }: { status: OrderStatus }) {
-  const map: Record<OrderStatus, string> = {
-    pending:   'bg-amber-100 text-amber-700',
-    confirmed: 'bg-sky-100 text-sky-700',
-    delivered: 'bg-emerald-100 text-emerald-700',
-    cancelled: 'bg-slate-100 text-slate-500',
-  }
-  const labels: Record<OrderStatus, string> = {
-    pending:   'Pending',
-    confirmed: 'Confirmed',
-    delivered: 'Delivered',
-    cancelled: 'Cancelled',
-  }
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${map[status]}`}>
-      {labels[status]}
-    </span>
-  )
-}
 
 function formatDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
