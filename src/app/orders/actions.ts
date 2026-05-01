@@ -3,6 +3,7 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { syncOrderToSheets } from '@/lib/google-sheets'
 
 export type FormState = {
   errors?: {
@@ -85,6 +86,42 @@ export async function createOrder(
   if (lineError) {
     await supabase.from('orders').delete().eq('id', order.id)
     return { message: lineError.message }
+  }
+
+  // Sync to Google Sheets — best-effort, never blocks order creation
+  try {
+    const [{ data: customer }, { data: products }] = await Promise.all([
+      supabase
+        .from('customers')
+        .select('store_name, account_type, address, city, state, zip, liquor_license_number')
+        .eq('id', customer_id)
+        .single(),
+      supabase
+        .from('products')
+        .select('id, name, vintage, volume_ml, abv_category')
+        .in('id', lineItems.map((li) => li.product_id)),
+    ])
+
+    if (customer && products) {
+      const productMap = new Map(products.map((p) => [p.id, p]))
+      await syncOrderToSheets({
+        orderDate: order_date,
+        customer,
+        lineItems: lineItems.map((li) => {
+          const p = productMap.get(li.product_id)
+          return {
+            product_name:  p?.name         ?? '',
+            vintage:       p?.vintage       ?? null,
+            volume_ml:     p?.volume_ml     ?? null,
+            abv_category:  p?.abv_category  ?? 'under_14',
+            quantity:      li.quantity,
+            unit_price:    li.unit_price,
+          }
+        }),
+      })
+    }
+  } catch (err) {
+    console.error('[google-sheets] sync failed:', err)
   }
 
   revalidatePath('/orders')
