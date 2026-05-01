@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { signOut } from '@/app/auth/actions'
 
 const NAV_ITEMS = [
+  { href: '/dashboard', label: 'Dashboard' },
   { href: '/customers', label: 'Customers' },
   { href: '/products',  label: 'Products'  },
   { href: '/orders',    label: 'Orders'    },
