@@ -5,13 +5,25 @@ import Link from 'next/link'
 import type { Customer } from '@/types/customer'
 import type { FormState } from '@/app/customers/actions'
 
-interface CustomerFormProps {
-  customer?: Customer
-  action: (prev: FormState, formData: FormData) => Promise<FormState>
-  cancelHref: string
+interface Defaults {
+  store_name?:            string
+  account_type?:          'on_premise' | 'off_premise'
+  address?:               string
+  city?:                  string
+  state?:                 string
+  zip?:                   string
+  liquor_license_number?: string
+  phone?:                 string
 }
 
-export function CustomerForm({ customer, action, cancelHref }: CustomerFormProps) {
+interface CustomerFormProps {
+  customer?:   Customer
+  defaults?:   Defaults
+  action:      (prev: FormState, formData: FormData) => Promise<FormState>
+  cancelHref:  string
+}
+
+export function CustomerForm({ customer, defaults, action, cancelHref }: CustomerFormProps) {
   const [state, formAction, pending] = useActionState(action, {})
   const [isActive, setIsActive] = useState(customer?.active ?? true)
 
@@ -40,7 +52,7 @@ export function CustomerForm({ customer, action, cancelHref }: CustomerFormProps
               id="store_name"
               name="store_name"
               type="text"
-              defaultValue={customer?.store_name ?? ''}
+              defaultValue={customer?.store_name ?? defaults?.store_name ?? ''}
               autoComplete="organization"
               className={inputClass(!!state.errors?.store_name)}
               placeholder="ABC Wine & Spirits"
@@ -54,7 +66,7 @@ export function CustomerForm({ customer, action, cancelHref }: CustomerFormProps
             <select
               id="account_type"
               name="account_type"
-              defaultValue={customer?.account_type ?? ''}
+              defaultValue={customer?.account_type ?? defaults?.account_type ?? ''}
               className={inputClass(!!state.errors?.account_type)}
             >
               <option value="" disabled>Select type…</option>
@@ -117,7 +129,7 @@ export function CustomerForm({ customer, action, cancelHref }: CustomerFormProps
               id="phone"
               name="phone"
               type="tel"
-              defaultValue={customer?.phone ?? ''}
+              defaultValue={customer?.phone ?? defaults?.phone ?? ''}
               autoComplete="tel"
               className={inputClass(false)}
               placeholder="(509) 555-0100"
@@ -154,7 +166,7 @@ export function CustomerForm({ customer, action, cancelHref }: CustomerFormProps
               id="address"
               name="address"
               type="text"
-              defaultValue={customer?.address ?? ''}
+              defaultValue={customer?.address ?? defaults?.address ?? ''}
               autoComplete="street-address"
               className={inputClass(false)}
               placeholder="123 Main St"
@@ -169,7 +181,7 @@ export function CustomerForm({ customer, action, cancelHref }: CustomerFormProps
                 id="city"
                 name="city"
                 type="text"
-                defaultValue={customer?.city ?? ''}
+                defaultValue={customer?.city ?? defaults?.city ?? ''}
                 autoComplete="address-level2"
                 className={inputClass(false)}
                 placeholder="Yakima"
@@ -183,7 +195,7 @@ export function CustomerForm({ customer, action, cancelHref }: CustomerFormProps
                 id="state"
                 name="state"
                 type="text"
-                defaultValue={customer?.state ?? ''}
+                defaultValue={customer?.state ?? defaults?.state ?? ''}
                 autoComplete="address-level1"
                 className={inputClass(false)}
                 placeholder="WA"
@@ -198,7 +210,7 @@ export function CustomerForm({ customer, action, cancelHref }: CustomerFormProps
                 id="zip"
                 name="zip"
                 type="text"
-                defaultValue={customer?.zip ?? ''}
+                defaultValue={customer?.zip ?? defaults?.zip ?? ''}
                 autoComplete="postal-code"
                 className={inputClass(false)}
                 placeholder="98901"
@@ -221,7 +233,7 @@ export function CustomerForm({ customer, action, cancelHref }: CustomerFormProps
             id="liquor_license_number"
             name="liquor_license_number"
             type="text"
-            defaultValue={customer?.liquor_license_number ?? ''}
+            defaultValue={customer?.liquor_license_number ?? defaults?.liquor_license_number ?? ''}
             className={inputClass(false)}
             placeholder="WA-1234567"
           />
