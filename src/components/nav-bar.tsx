@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/invoices',  label: 'Invoices'  },
   { href: '/reminders', label: 'Reminders' },
   { href: '/prospects', label: 'Prospects' },
+  { href: '/import',    label: 'Import'    },
 ]
 
 export function NavBar() {
