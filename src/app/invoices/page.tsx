@@ -1,8 +1,18 @@
 import { createServerClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { InvoiceFilterBar } from '@/components/invoices/invoice-filter-bar'
 
 export const metadata: Metadata = { title: 'Invoices — Two Mountain Wholesale' }
+
+type SP = Promise<{
+  start?: string | string[]
+  end?:   string | string[]
+}>
+
+function first(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v
+}
 
 function formatDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
@@ -10,10 +20,13 @@ function formatDate(iso: string) {
   })
 }
 
-export default async function InvoicesPage() {
-  const supabase = createServerClient()
+export default async function InvoicesPage({ searchParams }: { searchParams: SP }) {
+  const sp    = await searchParams
+  const start = first(sp.start) ?? ''
+  const end   = first(sp.end)   ?? ''
 
-  const { data: invoices, error } = await supabase
+  const supabase = createServerClient()
+  let query = supabase
     .from('invoices')
     .select(`
       id, invoice_number, invoice_date, attachment_url,
@@ -23,7 +36,12 @@ export default async function InvoicesPage() {
         order_line_items ( quantity, unit_price )
       )
     `)
-    .order('created_at', { ascending: false })
+    .order('invoice_date', { ascending: false })
+
+  if (start) query = query.gte('invoice_date', start)
+  if (end)   query = query.lte('invoice_date', end)
+
+  const { data: invoices, error } = await query
 
   type Row = NonNullable<typeof invoices>[number]
   type OrderRow = {
@@ -33,9 +51,9 @@ export default async function InvoicesPage() {
   }
 
   const enriched = invoices?.map((inv: Row) => {
-    const order  = inv.orders as unknown as OrderRow | null
-    const items  = order?.order_line_items ?? []
-    const total  = items.reduce((s, li) => s + li.quantity * Number(li.unit_price), 0)
+    const order = inv.orders as unknown as OrderRow | null
+    const items = order?.order_line_items ?? []
+    const total = items.reduce((s, li) => s + li.quantity * Number(li.unit_price), 0)
     return {
       id:             inv.id,
       invoice_number: inv.invoice_number,
@@ -47,16 +65,21 @@ export default async function InvoicesPage() {
     }
   })
 
+  const isFiltered = !!(start || end)
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Invoices</h1>
         {enriched && (
           <p className="mt-1 text-sm text-slate-500">
             {enriched.length} {enriched.length === 1 ? 'invoice' : 'invoices'}
+            {isFiltered ? ' matching filters' : ''}
           </p>
         )}
       </div>
+
+      <InvoiceFilterBar initialStart={start} initialEnd={end} />
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -66,16 +89,20 @@ export default async function InvoicesPage() {
 
       {!error && enriched?.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
-          <p className="text-sm font-medium text-slate-900">No invoices yet</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Invoices are generated from order detail pages.
+          <p className="text-sm font-medium text-slate-900">
+            {isFiltered ? 'No invoices match those filters' : 'No invoices yet'}
           </p>
-          <Link
-            href="/orders"
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            Go to Orders
-          </Link>
+          <p className="mt-1 text-sm text-slate-500">
+            {isFiltered ? 'Try adjusting the date range.' : 'Invoices are generated from order detail pages.'}
+          </p>
+          {!isFiltered && (
+            <Link
+              href="/orders"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              Go to Orders
+            </Link>
+          )}
         </div>
       )}
 
@@ -84,21 +111,11 @@ export default async function InvoicesPage() {
           <table className="min-w-full divide-y divide-slate-200">
             <thead>
               <tr className="bg-slate-50">
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-6">
-                  Invoice #
-                </th>
-                <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:table-cell sm:px-6">
-                  Date
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-6">
-                  Customer
-                </th>
-                <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 md:table-cell sm:px-6">
-                  Total
-                </th>
-                <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:table-cell sm:px-6">
-                  Attachment
-                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-6">Invoice #</th>
+                <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:table-cell sm:px-6">Date</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-6">Customer</th>
+                <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 md:table-cell sm:px-6">Total</th>
+                <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:table-cell sm:px-6">Attachment</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -118,10 +135,7 @@ export default async function InvoicesPage() {
                   </td>
                   <td className="px-4 py-4 sm:px-6">
                     {inv.orderId ? (
-                      <Link
-                        href={`/orders/${inv.orderId}`}
-                        className="font-medium text-slate-900 hover:text-blue-600"
-                      >
+                      <Link href={`/orders/${inv.orderId}`} className="font-medium text-slate-900 hover:text-blue-600">
                         {inv.customerName}
                       </Link>
                     ) : (
@@ -133,12 +147,7 @@ export default async function InvoicesPage() {
                   </td>
                   <td className="hidden px-4 py-4 sm:table-cell sm:px-6">
                     {inv.attachment_url ? (
-                      <a
-                        href={inv.attachment_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:text-blue-700"
-                      >
+                      <a href={inv.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-700">
                         View scan
                       </a>
                     ) : (

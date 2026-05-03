@@ -2,8 +2,19 @@ import { createServerClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import type { OrderStatus } from '@/types/order'
+import { OrderFilterBar } from '@/components/orders/order-filter-bar'
 
 export const metadata: Metadata = { title: 'Orders — Two Mountain Wholesale' }
+
+type SP = Promise<{
+  start?:  string | string[]
+  end?:    string | string[]
+  status?: string | string[]
+}>
+
+function first(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v
+}
 
 function fmt(n: number) {
   return '$' + n.toFixed(2)
@@ -15,16 +26,31 @@ function formatDate(iso: string) {
   })
 }
 
-export default async function OrdersPage() {
+const STATUS_VALUES = ['pending', 'confirmed', 'delivered', 'cancelled'] as const
+
+export default async function OrdersPage({ searchParams }: { searchParams: SP }) {
+  const sp     = await searchParams
+  const start  = first(sp.start)  ?? ''
+  const end    = first(sp.end)    ?? ''
+  const status = first(sp.status) ?? 'all'
+
   const supabase = createServerClient()
-  const { data: orders, error } = await supabase
+  let query = supabase
     .from('orders')
     .select(`
-      id, order_date, status, created_at,
+      id, order_date, status,
       customers ( store_name ),
       order_line_items ( quantity, unit_price )
     `)
     .order('order_date', { ascending: false })
+
+  if (start) query = query.gte('order_date', start)
+  if (end)   query = query.lte('order_date', end)
+  if (status !== 'all' && STATUS_VALUES.includes(status as OrderStatus)) {
+    query = query.eq('status', status)
+  }
+
+  const { data: orders, error } = await query
 
   type Row = NonNullable<typeof orders>[number]
   const enriched = orders?.map((o: Row) => {
@@ -39,14 +65,17 @@ export default async function OrdersPage() {
     }
   })
 
+  const isFiltered = !!(start || end || (status !== 'all'))
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8 flex items-start justify-between gap-4">
+      <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
           {enriched && (
             <p className="mt-1 text-sm text-slate-500">
               {enriched.length} {enriched.length === 1 ? 'order' : 'orders'}
+              {isFiltered ? ' matching filters' : ''}
             </p>
           )}
         </div>
@@ -58,6 +87,8 @@ export default async function OrdersPage() {
         </Link>
       </div>
 
+      <OrderFilterBar initialStart={start} initialEnd={end} initialStatus={status} />
+
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           Failed to load orders: {error.message}
@@ -66,14 +97,20 @@ export default async function OrdersPage() {
 
       {!error && enriched?.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
-          <p className="text-sm font-medium text-slate-900">No orders yet</p>
-          <p className="mt-1 text-sm text-slate-500">Create your first order to get started.</p>
-          <Link
-            href="/orders/new"
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-          >
-            <span aria-hidden>+</span> New Order
-          </Link>
+          <p className="text-sm font-medium text-slate-900">
+            {isFiltered ? 'No orders match those filters' : 'No orders yet'}
+          </p>
+          <p className="mt-1 text-sm text-slate-500">
+            {isFiltered ? 'Try adjusting the date range or status.' : 'Create your first order to get started.'}
+          </p>
+          {!isFiltered && (
+            <Link
+              href="/orders/new"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            >
+              <span aria-hidden>+</span> New Order
+            </Link>
+          )}
         </div>
       )}
 
@@ -82,21 +119,11 @@ export default async function OrdersPage() {
           <table className="min-w-full divide-y divide-slate-200">
             <thead>
               <tr className="bg-slate-50">
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-6">
-                  Date
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-6">
-                  Customer
-                </th>
-                <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:table-cell sm:px-6">
-                  Items
-                </th>
-                <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 md:table-cell sm:px-6">
-                  Total
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-6">
-                  Status
-                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-6">Date</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-6">Customer</th>
+                <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:table-cell sm:px-6">Items</th>
+                <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 md:table-cell sm:px-6">Total</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-6">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -108,10 +135,7 @@ export default async function OrdersPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-4 sm:px-6">
-                    <Link
-                      href={`/orders/${o.id}`}
-                      className="font-medium text-slate-900 hover:text-blue-600"
-                    >
+                    <Link href={`/orders/${o.id}`} className="font-medium text-slate-900 hover:text-blue-600">
                       {o.customerName}
                     </Link>
                   </td>

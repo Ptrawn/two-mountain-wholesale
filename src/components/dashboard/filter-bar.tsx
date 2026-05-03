@@ -3,6 +3,53 @@
 import { useRouter } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
 
+// ── Preset date ranges ────────────────────────────────────────────────────────
+
+function isoDate(d: Date) {
+  return d.toISOString().slice(0, 10)
+}
+
+type Preset = { label: string; start: string; end: string }
+
+function buildPresets(): Preset[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Last Week: Mon–Sun of the previous calendar week
+  const dow = today.getDay() // 0=Sun
+  const daysToLastMon = dow === 0 ? 13 : dow + 6
+  const lastMon = new Date(today); lastMon.setDate(today.getDate() - daysToLastMon)
+  const lastSun = new Date(lastMon); lastSun.setDate(lastMon.getDate() + 6)
+
+  // Last Month
+  const firstThisMonth  = new Date(today.getFullYear(), today.getMonth(), 1)
+  const lastOfLastMonth = new Date(firstThisMonth); lastOfLastMonth.setDate(0)
+  const firstOfLastMonth = new Date(lastOfLastMonth.getFullYear(), lastOfLastMonth.getMonth(), 1)
+
+  // Last 3 Months: 1st of 3 months ago → last day of last month
+  const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 3, 1)
+
+  // Last Quarter
+  const currentQ = Math.floor(today.getMonth() / 3)
+  const lastQYear  = currentQ === 0 ? today.getFullYear() - 1 : today.getFullYear()
+  const lastQMonth = currentQ === 0 ? 9 : (currentQ - 1) * 3   // start month of last quarter
+  const lastQStart = new Date(lastQYear, lastQMonth, 1)
+  const lastQEnd   = new Date(lastQYear, lastQMonth + 3, 0)
+
+  // Last Year
+  const ly = today.getFullYear() - 1
+
+  return [
+    { label: 'Last Week',      start: isoDate(lastMon),        end: isoDate(lastSun)        },
+    { label: 'Last Month',     start: isoDate(firstOfLastMonth), end: isoDate(lastOfLastMonth) },
+    { label: 'Last 3 Months',  start: isoDate(threeMonthsAgo), end: isoDate(lastOfLastMonth) },
+    { label: 'Last Quarter',   start: isoDate(lastQStart),     end: isoDate(lastQEnd)       },
+    { label: 'Last Year',      start: `${ly}-01-01`,           end: `${ly}-12-31`           },
+  ]
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 interface FilterBarProps {
   customers:          { id: string; store_name: string }[]
   products:           { id: string; name: string }[]
@@ -22,37 +69,84 @@ export function FilterBar({
   initialProducts,
   initialAccountType,
 }: FilterBarProps) {
-  const router = useRouter()
+  const router  = useRouter()
+  const presets = buildPresets()
+
   const [start,       setStart]       = useState(initialStart)
   const [end,         setEnd]         = useState(initialEnd)
   const [selectedCus, setSelectedCus] = useState<string[]>(initialCustomers)
   const [selectedPro, setSelectedPro] = useState<string[]>(initialProducts)
   const [accountType, setAccountType] = useState(initialAccountType)
 
-  function apply() {
+  const activePreset = presets.find((p) => p.start === start && p.end === end) ?? null
+
+  function applyDates(s: string, e: string) {
     const params = new URLSearchParams()
-    params.set('start', start)
-    params.set('end', end)
+    params.set('start', s)
+    params.set('end', e)
     selectedCus.forEach((id) => params.append('customers', id))
     selectedPro.forEach((id) => params.append('products', id))
     if (accountType !== 'all') params.set('account_type', accountType)
     router.replace(`/dashboard?${params.toString()}`)
   }
 
+  function apply() { applyDates(start, end) }
+
+  function applyPreset(p: Preset) {
+    setStart(p.start)
+    setEnd(p.end)
+    applyDates(p.start, p.end)
+  }
+
   function clear() {
-    const now   = new Date()
-    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-    const end   = now.toISOString().slice(0, 10)
-    setStart(start)
-    setEnd(end)
+    const now = new Date()
+    const s   = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+    const e   = now.toISOString().slice(0, 10)
+    setStart(s)
+    setEnd(e)
     setSelectedCus([])
     setSelectedPro([])
     setAccountType('all')
     router.replace('/dashboard')
   }
 
+  function handleExport() {
+    const params = new URLSearchParams()
+    params.set('start', start)
+    params.set('end', end)
+    selectedCus.forEach((id) => params.append('customers', id))
+    selectedPro.forEach((id) => params.append('products', id))
+    if (accountType !== 'all') params.set('account_type', accountType)
+    const a = document.createElement('a')
+    a.href = `/api/dashboard/export?${params.toString()}`
+    a.download = `two-mountain-sales-${start}-to-${end}.csv`
+    a.click()
+  }
+
   return (
     <div className="mb-8 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      {/* Preset buttons */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {presets.map((p) => {
+          const active = activePreset?.label === p.label
+          return (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => applyPreset(p)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                active
+                  ? 'bg-blue-600 text-white'
+                  : 'border border-slate-300 text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700'
+              }`}
+            >
+              {p.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Date + filter row */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">From</label>
@@ -112,6 +206,15 @@ export function FilterBar({
           className="h-9 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
         >
           Clear
+        </button>
+        <button
+          onClick={handleExport}
+          className="ml-auto h-9 inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          Export CSV
         </button>
       </div>
     </div>
