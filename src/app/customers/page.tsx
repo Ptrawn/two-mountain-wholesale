@@ -3,6 +3,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { CustomerSearch } from '@/components/customers/customer-search'
 
+export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Customers — Two Mountain Wholesale' }
 
 export default async function CustomersPage() {

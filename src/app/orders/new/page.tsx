@@ -6,6 +6,7 @@ import { createOrder } from '@/app/orders/actions'
 import type { Customer } from '@/types/customer'
 import type { Product } from '@/types/product'
 
+export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'New Order — Two Mountain Wholesale' }
 
 export default async function NewOrderPage() {

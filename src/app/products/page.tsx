@@ -3,6 +3,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { ProductSearch } from '@/components/products/product-search'
 
+export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Products — Two Mountain Wholesale' }
 
 export default async function ProductsPage() {
